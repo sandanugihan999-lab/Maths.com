@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="si"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
-<title>O/L ගණිත Paper Timer</title>
+<title>O/L Paper Timer</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+Sinhala:wght@400;600;700&display=swap">
-</head><body>
+<style>.fld{display:block;width:100%;box-sizing:border-box;padding:10px;margin-top:4px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit}</style><link rel="manifest" href="manifest.json"><meta name="theme-color" content="#12254A"><link rel="apple-touch-icon" href="icon-192.png"></head><body>
 <style>
 /* Layout: drafting-table app. Blueprint ink on cool paper, one safety-orange accent for the clock and primary actions. */
 :root{
@@ -130,7 +130,7 @@ function streak(){const days=[...new Set(S.history.map(h=>h.date))].sort();if(!d
   while(days.includes(f(d))){n++;d.setDate(d.getDate()-1)}return n}
 function todaysPaper(){
   const cnt=id=>S.history.filter(h=>h.pid===id).length;
-  return [...PAPERS].sort((a,b)=>cnt(a.id)-cnt(b.id)||PAPERS.indexOf(a)-PAPERS.indexOf(b))[0];
+  return [...(PAPERS.some(p=>!S.subj||subjOf(p)===S.subj)?PAPERS.filter(p=>!S.subj||subjOf(p)===S.subj):PAPERS)].sort((a,b)=>cnt(a.id)-cnt(b.id)||PAPERS.indexOf(a)-PAPERS.indexOf(b))[0];
 }
 const usedToday=()=>S.lastStart===today();
 
@@ -162,6 +162,7 @@ function onTick(){
   const a=S.active;if(view!=='exam'||!a||(a.mode!=='q'&&a.mode!=='review'))return;
   const r=remaining();
   const el=$('#clock');if(el){el.textContent=fmt(r);el.classList.toggle('low',r<=15)}
+  if(S.warn&&r<=30&&r>0&&a.left==null){const wk=a.sec+'|'+a.qi+'|'+a.mode;if(window._wk!==wk){window._wk=wk;beep(1);try{navigator.vibrate&&navigator.vibrate(200)}catch(e){}}}
   const m=$('#meter');if(m){const {s}=cur();const tot=(a.mode==='q'?s.secs:s.review);m.style.width=Math.max(0,Math.min(100,r/tot*100))+'%'}
   if(a.left==null&&r<=0)advance(true);
 }
@@ -170,7 +171,7 @@ function toggleFlag(id){const a=S.active;a.flags[id]=!a.flags[id];save();render(
 function finishPaper(){
   const a=S.active,p=paperOf(a.pid),sc=score(p,a.marks);
   S.history.unshift({pid:a.pid,date:today(),ts:Date.now(),marks:a.marks,times:a.times,total:sc.total,max:sc.max});
-  S.active=null;save();doc=S.history[0];view='result';render();
+  S.active=null;save();doc=S.history[0];view='result';if(S.mock&&S.mock.i+1<S.mock.ids.length){view='break';S.mock.until=Date.now()+600000;save()}else if(S.mock){S.mock=null;save()}render();
 }
 
 /* ---------- Views ---------- */
@@ -180,7 +181,9 @@ function render(){
     const m=S.active.mode;
     if(m==='mark'){doc=S.active;view='mark';return render()}
     app.innerHTML=m==='q'?vQuestion():vReview();
-  }else if(view==='mark')app.innerHTML=vMark();
+  }else if(VIEWS[view])app.innerHTML=VIEWS[view]();
+  else if(view==='add')app.innerHTML=vAdd();
+  else if(view==='mark')app.innerHTML=vMark();
   else if(view==='result')app.innerHTML=vResult();
   else app.innerHTML=vHome();
   const k=view+'|'+(S.active?[S.active.mode,S.active.sec,S.active.qi].join():'')+'|'+(doc?doc.mi:'')+'|'+(doc&&doc.pid);if(k!==window._k){window.scrollTo(0,0);window._k=k}onTick();
@@ -194,26 +197,27 @@ function vHome(){
   const card=(p,isToday)=>{
     const best=S.history.filter(h=>h.pid===p.id);
     return `<div class="item"><div class="grow"><b>${p.year} · ${p.title}</b><div class="small muted">ප්‍රශ්න ${totalQs(p)} · ${Math.round(totalSecs(p)/60)} මිනිත්තු · ලකුණු 100${best.length?` · කලින් උපරිමය ${Math.max(...best.map(h=>h.total))}`:''}</div></div>
-      ${isToday?'<span class="pill ok">අද paper එක</span>':'<span class="pill lock">හෙට පසුව</span>'}</div>`};
-  return `<div class="top"><div><div class="tag">Road to Engineer</div><h1>O/L ගණිත Paper Timer</h1></div>${themeBtn()}</div>
+      ${isToday?'<span class="pill ok">අද paper එක</span>':'<span class="pill lock">හෙට පසුව</span>'}${p.custom?`<button class="btn ghost" data-act="delp" data-id="${p.id}">මකන්න</button>`:''}</div>`};
+  return `<div class="top"><div><div class="tag">Road to Engineer</div><h1>O/L Paper Timer</h1></div>${themeBtn()}</div>
   <div class="stack">
    <div class="note">${q}</div>
    <div class="panel today stack">
      <div class="row"><div class="grow"><div class="tag">අද කළ යුතු paper එක</div><h2>${tp.year} · ${tp.title}</h2></div>
        <div class="big" style="font-size:1.6rem">${streak()} <span class="small muted" style="font-family:var(--f-ui);font-weight:400">දින අඛණ්ඩව</span></div></div>
      <div class="small muted">${tp.sections.map(s=>`${s.name}: ප්‍රශ්න ${s.q.length} × ${fmt(s.secs)}${s.review?` + අවසානයේ ${s.review/60}මි. පරීක්ෂාව`:''}`).join(' &nbsp;|&nbsp; ')}</div>
-     ${act?`<button class="btn pri" data-act="resume">පටන් ගත් paper එක දිගටම කරන්න</button>`
+     ${act?`<button class="btn pri" data-act="resume">${resumeTxt()}</button><button class="btn ghost" data-act="abort">අත්හරින්න</button>`
        :locked?`<button class="btn pri" disabled>අද paper එක ඉවරයි. ඊළඟ එක හෙට</button>`
        :`<button class="btn pri" data-act="start" data-id="${tp.id}">Paper එක පටන් ගන්න</button>`}
      <div class="small muted">දවසකට paper එකයි. පටන් ගත්තම ප්‍රශ්න එකින් එක ඒවායේ කාලය ගණන් කරයි.</div>
    </div>
    <div class="panel stack"><div class="row"><h3 class="grow">ඔබේ ඉලක්කය</h3><div class="row">${[50,65,75,90].map(t=>`<button class="chip ${S.target===t?'on':''}" data-act="target" data-v="${t}">${t}</button>`).join('')}</div></div>
      <div class="small muted">ලකුණු 100න් ඉලක්කය. Results පිටුවේ ඒකට තව ලකුණු කීයක් ඕනෙද කියලා පෙන්වයි.</div></div>
-   <div class="stack"><h3>සියලු Papers</h3><div class="list">${PAPERS.map(p=>card(p,p.id===tp.id)).join('')}</div>
-     <div class="small muted">තව අවුරුදු වල papers එකතු කළාම මෙතැනට එයි.</div></div>
+   <div class="stack"><h3>සියලු Papers</h3><div class="list">${PAPERS.filter(p=>!S.subj||subjOf(p)===S.subj).map(p=>card(p,p.id===tp.id)).join('')}</div>
+     <button class="btn" data-act="addp">+ Paper එකක් එකතු කරන්න (PDF)</button></div>
    ${last.length?`<div class="panel stack"><h3>ප්‍රගතිය</h3><div class="spark" aria-label="ලකුණු">${last.map(h=>`<i title="${h.total}" style="height:${Math.max(4,h.total/h.max*100)}%"></i>`).join('')}</div>
      <div class="list">${S.history.slice(0,6).map((h,i)=>{const p=paperOf(h.pid);return `<div class="item"><div class="grow"><b>${p.year} · ${p.title}</b><div class="small muted">${h.date}</div></div><span class="big">${h.total}/${h.max}</span><button class="btn" data-act="open" data-i="${i}">බලන්න</button></div>`}).join('')}</div></div>`:''}
-   <div class="row"><button class="btn ghost" data-act="reset">${askReset?'නැවත ඔබන්න: සියල්ල මකා දමයි':'Progress reset කරන්න'}</button>${askReset?'<button class="btn ghost" data-act="cancel">එපා</button>':''}</div>
+   ${homeExtra2()}
+    <div class="row"><button class="btn ghost" data-act="reset">${askReset?'නැවත ඔබන්න: සියල්ල මකා දමයි':'Progress reset කරන්න'}</button>${askReset?'<button class="btn ghost" data-act="cancel">එපා</button>':''}</div>
   </div>`;
 }
 
@@ -258,8 +262,8 @@ function vMark(){
    <div class="grid">${chips}</div>
    <div class="panel stack"><div class="row"><h3 class="grow">ප්‍රශ්නය ${it.n} · උපරිම ලකුණු ${it.sec.max}</h3>${a.times&&a.times[it.id]!=null?`<span class="pill">කාලය ${fmt(a.times[it.id])}</span>`:''}</div>
     <div class="marks" role="group" aria-label="ලකුණු">${opts.map(v=>`<button class="${a.marks[it.id]===v?'on':''}" data-act="mark" data-v="${v}">${v}</button>`).join('')}</div></div>
-   <div><div class="tag" style="margin-bottom:6px">ලකුණු දීමේ පටිපාටිය</div>${it.a.map(u=>`<div class="sheet"><img src="${U(u)}" alt="පිළිතුර ${it.n}"></div>`).join('')}</div>
-   <details><summary class="btn ghost" style="display:inline-block">ප්‍රශ්නය බලන්න</summary><div class="sheet" style="margin-top:8px"><img src="${U(it.q)}" alt="ප්‍රශ්නය ${it.n}"></div></details>
+   ${tagSel(K(a.pid,it.id))}${whySel(K(a.pid,it.id))}${noteBox(K(a.pid,it.id),'ප්‍රශ්නයේ සටහන')}${noteBox(K(a.pid,'S'+it.sec.key),'කොටසේ සටහන')}<div><div class="tag" style="margin-bottom:6px">ලකුණු දීමේ පටිපාටිය</div>${it.a.map(u=>`<div class="sheet"><img src="${U(u)}" alt="පිළිතුර ${it.n}"></div>`).join('')}</div>
+   ${qVid(a.pid,it)}<details><summary class="btn ghost" style="display:inline-block">ප්‍රශ්නය බලන්න</summary><div class="sheet" style="margin-top:8px"><img src="${U(it.q)}" alt="ප්‍රශ්නය ${it.n}"></div></details>
   </div>
   <div class="foot"><div class="in"><button class="btn" data-act="mprev" ${i===0?'disabled':''}>කලින්</button>
    ${i===items.length-1?`<button class="btn pri" data-act="done">${isActive?'ප්‍රතිඵල බලන්න':'සුරකින්න'}</button>`:`<button class="btn pri" data-act="mnext">ඊළඟ ප්‍රශ්නය</button>`}</div></div>`;
@@ -286,9 +290,343 @@ function vResult(){
    </div>
    <div class="note"><b>Engineer motivation</b><br>${mo.t}</div>
    ${slow.length?`<div class="panel stack"><h3>වැඩිම කාලය ගත වූ ප්‍රශ්න</h3>${slow.map(x=>`<div class="row"><span class="grow">ප්‍රශ්නය ${x.q.n}</span><span class="big">${fmt(x.t)} / ${fmt(x.q.sec.secs)}</span></div>`).join('')}</div>`:''}
-   <div class="row"><button class="btn pri" data-act="review">ප්‍රශ්න සහ පිළිතුරු නැවත බලන්න</button><button class="btn" data-act="home">මුල් පිටුව</button></div>
+   <div class="row"><button class="btn pri" data-act="review">ප්‍රශ්න සහ පිළිතුරු නැවත බලන්න</button><button class="btn" data-act="share">Result එක share කරන්න</button><button class="btn" data-act="home">මුල් පිටුව</button></div>
   </div>`;
 }
+
+/* ---------- Paper එකතු කිරීම (PDF auto crop) ---------- */
+const PRESETS={
+ p1:{title:'ගණිතය I',name:'ගණිතය I (A: ප්‍රශ්න 25, B: ප්‍රශ්න 5)',secs:[
+  {key:'A',name:'A කොටස',max:2,secs:120,review:600,ns:range(1,25),ids:range(1,25).map(n=>'A'+n)},
+  {key:'B',name:'B කොටස',max:10,secs:600,review:0,ns:range(1,5),ids:range(1,5).map(n=>'B'+n)}]},
+ p2:{title:'ගණිතය II',name:'ගණිතය II (A: 6, B: 6, හොඳම 5 බැගින්)',secs:[
+  {key:'A',name:'A කොටස',max:10,secs:750,review:0,best:5,ns:range(1,6),ids:range(1,6).map(n=>'Q'+n)},
+  {key:'B',name:'B කොටස',max:10,secs:750,review:0,best:5,ns:range(7,12),ids:range(7,12).map(n=>'Q'+n)}]}
+};
+const expOf=pr=>pr.secs.flatMap(s=>s.ns), labOf=pr=>pr.secs.flatMap(s=>s.ids);
+let ADD=null;
+const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open('olt_papers',1);r.onupgradeneeded=()=>r.result.createObjectStore('p',{keyPath:'id'});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+const idbDo=(mode,fn)=>idb().then(db=>new Promise((res,rej)=>{const t=db.transaction('p',mode),rq=fn(t.objectStore('p'));t.oncomplete=()=>res(rq&&rq.result);t.onerror=()=>rej(t.error)}));
+function hydrate(rec){
+  const reg=(k,b)=>{IMGDATA[k]=URL.createObjectURL(b);return k};
+  return {id:rec.id,subject:rec.subject,year:rec.year,title:rec.title,custom:true,sections:rec.sections.map(s=>Object.assign({},s,{q:s.q.map(q=>({id:q.id,n:q.n,q:reg(rec.id+'/q/'+q.id,q.qb),a:(q.ab||[]).map((b,i)=>reg(rec.id+'/a/'+q.id+'/'+i,b))}))}))};
+}
+function loadCustom(){return idbDo('readonly',s=>s.getAll()).then(l=>{(l||[]).sort((a,b)=>a.ts-b.ts).forEach(r=>PAPERS.push(hydrate(r)))}).catch(()=>{})}
+let _pj=null;
+function loadPdfJs(){return _pj||(_pj=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  s.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';res(pdfjsLib)};
+  s.onerror=()=>{_pj=null;rej(new Error('PDF library එක load වුණේ නැහැ. Internet බලන්න.'))};document.head.appendChild(s)}))}
+function rowsInk(cv){const w=cv.width,h=cv.height,d=cv.getContext('2d').getImageData(0,0,w,h).data,r=new Uint8Array(h);
+  for(let y=0;y<h;y++){let c=0;for(let x=0;x<w;x++){const i=(y*w+x)*4;if(d[i]+d[i+1]+d[i+2]<450)c++}r[y]=c>2?1:0}return r}
+function compose(pages,ink,sg){
+  const parts=[];
+  for(const [p,a,b] of sg){let y0=Math.max(0,Math.floor(a)),y1=Math.min(pages[p].height,Math.ceil(b));
+    while(y0<y1&&!ink[p][y0])y0++;while(y1>y0&&!ink[p][y1-1])y1--;
+    if(y1-y0>6)parts.push([p,Math.max(0,y0-8),Math.min(pages[p].height,y1+8)])}
+  if(!parts.length)parts.push([0,0,40]);
+  const w=pages[0].width,cv=document.createElement('canvas');cv.width=w;cv.height=parts.reduce((t,x)=>t+x[2]-x[1],0);
+  const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,w,cv.height);
+  let y=0;for(const [p,a,b] of parts){cx.drawImage(pages[p],0,a,pages[p].width,b-a,0,y,pages[p].width,b-a);y+=b-a}
+  return new Promise(r=>cv.toBlob(r,'image/webp',.85));
+}
+async function cropAll(file,exp,onP){
+  const SC=2,lib=await loadPdfJs(),pdf=await lib.getDocument({data:await file.arrayBuffer()}).promise;
+  const pages=[],ink=[],cands=[];
+  for(let i=1;i<=pdf.numPages;i++){
+    const pg=await pdf.getPage(i),vp=pg.getViewport({scale:SC}),cv=document.createElement('canvas');
+    cv.width=Math.round(vp.width);cv.height=Math.round(vp.height);
+    const cx=cv.getContext('2d',{willReadFrequently:true});cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);
+    await pg.render({canvasContext:cx,viewport:vp}).promise;
+    try{const tc=await pg.getTextContent();tc.items.forEach(it=>{const m=/^\s*0?(\d{1,2})\s*[.)]?\s*$/.exec(it.str||'');if(!m)return;
+      const pt=vp.convertToViewportPoint(it.transform[4],it.transform[5]);if(pt[0]>vp.width*.2)return;
+      cands.push({pi:i-1,n:+m[1],y:Math.max(0,pt[1]-(it.height||8)*SC*1.2-6)})})}catch(e){}
+    pages.push(cv);ink.push(rowsInk(cv));onP&&onP(i,pdf.numPages);
+  }
+  cands.sort((a,b)=>a.pi-b.pi||a.y-b.y);
+  const st=[];let k=0;
+  for(const c of cands){if(k<exp.length&&c.n===exp[k]){st.push(c);k++}}
+  let list=[];
+  if(st.length===exp.length){
+    st.push({pi:pages.length,y:0});
+    for(let i=0;i<exp.length;i++){const a=st[i],b=st[i+1],sg=[];
+      for(let p=a.pi;p<=Math.min(b.pi,pages.length-1);p++){const H=pages[p].height,y0=p===a.pi?a.y:H*.04,y1=p===b.pi?b.y-4:H*.96;if(y1>y0)sg.push([p,y0,y1])}
+      list.push(sg)}
+  }else{
+    const bl=g=>{const o=[];pages.forEach((cv,p)=>{const H=cv.height,r=ink[p];let s=-1,gap=0;
+      for(let y=Math.floor(H*.04);y<H*.96;y++){if(r[y]){if(s<0)s=y;gap=0}else if(s>=0&&++gap>=g){o.push([[p,s,y-gap+1]]);s=-1;gap=0}}
+      if(s>=0)o.push([[p,s,H*.96]])});return o};
+    for(let g=120;g>=14;g-=6){const o=bl(g);if(o.length>=exp.length){list=o;break}}
+    if(!list.length)list=bl(14);
+  }
+  return {blobs:await Promise.all(list.map(sg=>compose(pages,ink,sg))),count:list.length};
+}
+async function doCrop(){
+  const st=$('#ast'),pv=$('#apv'),sv=$('#asv'),f=$('#afq').files[0],fa=$('#afa').files[0],pr=getPr(),exp=expOf(pr),lab=labOf(pr);
+  ADD=null;sv.disabled=true;pv.innerHTML='';
+  if(!f){st.textContent='ප්‍රශ්න PDF එක තෝරන්න.';return}
+  try{
+    const q=await cropAll(f,exp,(i,n)=>{st.textContent='ප්‍රශ්න PDF: page '+i+'/'+n+' ...'});
+    let a=null,am='';
+    if(fa){const r=await cropAll(fa,exp,(i,n)=>{st.textContent='පිළිතුරු PDF: page '+i+'/'+n+' ...'});
+      if(r.count===exp.length)a=r.blobs;else am=' පිළිතුරු PDF එකෙන් කොටස් '+r.count+'ක් හමුවුණා ('+exp.length+' ඕන). ඒක නිසා පිළිතුරු දාන්නේ නැහැ.'}
+    const ok=q.count===exp.length;
+    st.textContent=(ok?'ප්‍රශ්න '+q.count+' ම crop වුණා. පහළින් බලලා නිවැරදි නම් සුරකින්න.':'ප්‍රශ්න '+q.count+'ක් හමුවුණා, ඕන '+exp.length+'ක්. මේ PDF එක auto crop වුණේ නැහැ. නිවැරදි preset එක තෝරලා බලන්න.')+am;
+    CR={q:q.blobs,a,lab,exp};ADD=CR;drawPv();
+    
+  }catch(e){st.textContent='දෝෂයක්: '+e.message}
+}
+async function saveAdd(){
+  if(!ADD)return;
+  const pr=getPr(),id='c'+Date.now();let o=0;
+  const rec={id,ts:Date.now(),subject:$('#asj').value.trim()||'ගණිතය',year:$('#ayr').value.trim()||'අලුත් paper',title:$('#atl').value.trim()||pr.title,
+    sections:pr.secs.map(s=>({key:s.key,name:s.name,max:s.max,secs:s.secs,review:s.review,best:s.best,q:s.ids.map((qid,j)=>{const k=o++;return {id:qid,n:s.ns[j],qb:ADD.q[k],ab:ADD.a&&ADD.a.length===ADD.q.length?[ADD.a[k]]:[]}})}))};
+  try{await idbDo('readwrite',s=>s.put(rec))}catch(e){alert('Browser එකේ සුරකින්න බැරි වුණා: '+e.message);return}
+  PAPERS.push(hydrate(rec));ADD=null;view='home';render();
+}
+async function delPaper(id){
+  const i=PAPERS.findIndex(p=>p.id===id);if(i<0)return;
+  PAPERS.splice(i,1);S.history=S.history.filter(h=>h.pid!==id);if(S.active&&S.active.pid===id)S.active=null;save();
+  try{await idbDo('readwrite',s=>s.delete(id))}catch(e){}render();
+}
+function vAdd(){return `<div class="top"><div><div class="tag">Papers</div><h1>Paper එකක් එකතු කරන්න</h1></div><button class="btn" data-act="home">ආපසු</button></div>
+  <div class="stack"><div class="panel stack">
+   <label class="small muted">විෂය<input id="asj" class="fld" list="sjl" value="ගණිතය"><datalist id="sjl"><option>ගණිතය</option><option>විද්‍යාව</option><option>ඉතිහාසය</option><option>සිංහල</option><option>ඉංග්‍රීසි</option><option>ආගම</option><option>වාණිජ්‍ය</option></datalist></label>
+   <label class="small muted">අවුරුද්ද<input id="ayr" class="fld" placeholder="උදා: 2022"></label>
+   <label class="small muted">Paper එකේ වර්ගය<select id="apre" class="fld">${Object.keys(PRESETS).map(k=>`<option value="${k}">${PRESETS[k].name}</option>`).join('')}<option value="custom">Custom (ඔයාම හදන්න)</option></select></label>
+   <label class="small muted">Custom නම් (කොටස:ප්‍රශ්න:ලකුණු:තත්පර:පරීක්ෂා මිනිත්තු, කොමාවෙන්)<input id="acs" class="fld" value="A:25:2:120:10, B:5:10:600:0"></label>
+   <label class="small muted">නම (අවශ්‍ය නම් වෙනස් කරන්න)<input id="atl" class="fld" placeholder="ගණිතය I"></label>
+   <label class="small muted">ප්‍රශ්න පත්‍රය (PDF)<input id="afq" class="fld" type="file" accept="application/pdf"></label>
+   <label class="small muted">ලකුණු දීමේ පටිපාටිය (PDF, අවශ්‍ය නම් පමණක්)<input id="afa" class="fld" type="file" accept="application/pdf"></label>
+   <button class="btn pri" data-act="cropgo">Auto crop කරන්න</button>
+   <div id="ast" class="small muted"></div></div>
+   <div id="apv" class="stack"></div>
+   <button class="btn pri" id="asv" data-act="saveadd" disabled>Paper එක සුරකින්න</button></div>`}
+
+/* ---------- Extras: backup, practice, charts, topics, reminder, share ---------- */
+S.tags=S.tags||{};S.prac=S.prac||{};S.rem=S.rem||{on:false,t:'18:00',last:''};
+const TOPICS=['සංඛ්‍යා සහ ප්‍රතිශත','වීජ ගණිතය','සමීකරණ','ජ්‍යාමිතිය','ත්‍රිකෝණමිතිය','වර්ගඵලය සහ පරිමාව','සම්භාවිතාව','සංඛ්‍යානය','කුලක','ප්‍රස්තාර'];
+const K=(pid,qid)=>pid+'|'+qid;
+const back='<button class="btn" data-act="home">ආපසු</button>';
+const topBar=(tag,h)=>`<div class="top"><div><div class="tag">${tag}</div><h1>${h}</h1></div>${back}</div>`;
+const tagSel=key=>`<select class="fld" data-tag="${key}"><option value="">පාඩම තෝරන්න (විශ්ලේෂණයට)</option>${topicsFor(key).map(t=>`<option ${S.tags[key]===t?'selected':''}>${t}</option>`).join('')}</select>`;
+function statusMap(){
+  const m={};
+  [...S.history].sort((a,b)=>a.ts-b.ts).forEach(h=>{const p=paperOf(h.pid);if(!p)return;flat(p).forEach(it=>{if(h.marks[it.id]==null)return;m[K(h.pid,it.id)]={ts:h.ts,ok:+h.marks[it.id]>=it.sec.max}})});
+  Object.entries(S.prac).forEach(([k,v])=>{if(!m[k]||v.ts>m[k].ts)m[k]={ts:v.ts,ok:v.ok}});
+  return m}
+const wrongKeys=()=>Object.entries(statusMap()).filter(e=>!e[1].ok).map(e=>e[0]);
+function itemOf(key){const [pid,qid]=key.split('|'),p=paperOf(pid);if(!p)return null;const it=flat(p).find(x=>x.id===qid);return it?{p,it}:null}
+let PR={src:'wrong',topic:'',q:null,i:0,show:false};
+function pracStart(){
+  let keys=PR.src==='wrong'?wrongKeys():PR.src==='due'?dueKeys():(paperOf(PR.src)?flat(paperOf(PR.src)).map(it=>K(PR.src,it.id)):[]);
+  if(PR.topic)keys=keys.filter(k=>S.tags[k]===PR.topic);
+  PR.q=keys.map(itemOf).filter(Boolean);PR.i=0;PR.show=false;
+}
+function vPrac(){
+  const n=wrongKeys().length;
+  if(!PR.q)return `${topBar('Practice','පුහුණුව')}<div class="stack"><div class="panel stack"><h3>ප්‍රශ්න තෝරන්න</h3>
+   <div class="row" style="flex-wrap:wrap"><button class="chip ${PR.src==='due'?'on':''}" data-act="psrc" data-v="due">අද පුහුණුවට (${dueKeys().length})</button><button class="chip ${PR.src==='wrong'?'on':''}" data-act="psrc" data-v="wrong">වැරදුණු ප්‍රශ්න (${n})</button>${PAPERS.map(p=>`<button class="chip ${PR.src===p.id?'on':''}" data-act="psrc" data-v="${p.id}">${p.year} ${p.title}</button>`).join('')}</div>
+   <h3>පාඩම</h3><div class="row" style="flex-wrap:wrap"><button class="chip ${PR.topic?'':'on'}" data-act="ptopic" data-v="">සියල්ල</button>${allTopics().map(t=>`<button class="chip ${PR.topic===t?'on':''}" data-act="ptopic" data-v="${t}">${t}</button>`).join('')}</div>
+   <button class="btn pri" data-act="pstart">පටන් ගන්න</button><div class="small muted">කාලය ගණන් කරන්නේ නැහැ. පිළිතුර බලලා හරිද වැරදිද කියලා සලකුණු කරන්න. වැරදුණු ඒවා හරි වුණාම ලැයිස්තුවෙන් ඉවත් වෙනවා.</div></div></div>`;
+  if(!PR.q.length)return `${topBar('Practice','පුහුණුව')}<div class="note">මේ තේරීමට ප්‍රශ්න නැහැ.</div><button class="btn" data-act="pexit">ආපසු තෝරන්න</button>`;
+  if(PR.i>=PR.q.length)return `${topBar('Practice','ඉවරයි')}<div class="note">ප්‍රශ්න ${PR.q.length}ම කළා.</div><button class="btn pri" data-act="pexit">නැවත</button>`;
+  const {p,it}=PR.q[PR.i],key=K(p.id,it.id);
+  return `${topBar('Practice',`${PR.i+1}/${PR.q.length} · ${p.year} ${p.title} · ප්‍රශ්නය ${it.n}`)}<div class="stack">
+   <div class="sheet"><img src="${U(it.q)}" alt="ප්‍රශ්නය"></div>${tagSel(key)}${whySel(key)}${noteBox(key)}
+   ${PR.show?`${it.a.map(u=>`<div class="sheet"><img src="${U(u)}" alt="පිළිතුර"></div>`).join('')||'<div class="muted">පිළිතුරක් නැහැ.</div>'}${qVid(p.id,it)}<div class="row"><button class="btn pri" data-act="pok">හරි</button><button class="btn" data-act="pno">වැරදි</button></div>`
+   :`<button class="btn pri" data-act="pshow">පිළිතුර බලන්න</button>`}<button class="btn ghost" data-act="pexit">නවතන්න</button></div>`;
+}
+const line=(vals,c)=>{if(!vals.length)return'';const w=640,h=260,x=i=>vals.length===1?w/2:20+i*(w-40)/(vals.length-1),y=v=>h-20-v/100*(h-40);
+  return `<polyline fill="none" stroke="${c}" stroke-width="2.5" points="${vals.map((v,i)=>x(i)+','+y(v)).join(' ')}"/>`+vals.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="3.5" fill="${c}"/>`).join('')};
+function vProg(){
+  const hs=[...S.history].filter(h=>paperOf(h.pid)).reverse().slice(-20);
+  if(!hs.length)return `${topBar('Progress','ප්‍රගතිය')}<div class="note">තාම paper එකක්වත් කරලා නැහැ.</div>`;
+  const part=(h,i)=>{const sc=score(paperOf(h.pid),h.marks).parts[i];return sc?Math.round(sc.score/sc.max*100):null};
+  const tot=hs.map(h=>Math.round(h.total/h.max*100)),A=hs.map(h=>part(h,0)),B=hs.map(h=>part(h,1));
+  const avg=a=>Math.round(a.reduce((x,y)=>x+y,0)/a.length);
+  return `${topBar('Progress','ප්‍රගතිය')}<div class="stack"><div class="panel stack"><svg viewBox="0 0 640 260" style="width:100%;background:var(--card)">
+   ${[0,25,50,75,100].map(v=>`<line x1="20" x2="620" y1="${240-v*2.2}" y2="${240-v*2.2}" stroke="var(--grid)"/><text x="2" y="${244-v*2.2}" font-size="10" fill="var(--ink2)">${v}</text>`).join('')}
+   <line x1="20" x2="620" y1="${240-S.target*2.2}" y2="${240-S.target*2.2}" stroke="var(--accent)" stroke-dasharray="6 4"/>
+   ${line(A.filter(v=>v!=null),'#1B7F4B')}${line(B.filter(v=>v!=null),'#B7791F')}${line(tot,'#12254A')}</svg>
+   <div class="small muted">කළු: මුළු % · කොළ: A කොටස · කහ: B කොටස · තැඹිලි ඉරි: ඉලක්කය (${S.target})</div></div>
+   <div class="two"><div class="panel"><div class="tag">Papers</div><div class="big">${S.history.length}</div></div><div class="panel"><div class="tag">සාමාන්‍යය</div><div class="big">${avg(tot)}%</div></div></div>
+   <div class="panel"><div class="tag">උපරිමය</div><div class="big">${Math.max(...tot)}%</div></div></div>`;
+}
+function vAna(){
+  const agg={};let un=0;
+  S.history.forEach(h=>{const p=paperOf(h.pid);if(!p)return;flat(p).forEach(it=>{if(h.marks[it.id]==null)return;const t=S.tags[K(h.pid,it.id)];if(!t){un++;return}
+    const a=agg[t]=agg[t]||{g:0,m:0,n:0};a.g+=+h.marks[it.id]||0;a.m+=it.sec.max;a.n++})});
+  const rows=Object.entries(agg).map(([t,a])=>({t,pct:Math.round(a.g/a.m*100),n:a.n})).sort((a,b)=>a.pct-b.pct);
+  return `${topBar('Analysis','පාඩම් විශ්ලේෂණය')}<div class="stack">${rows.length?`<div class="panel stack bars">${rows.map(r=>`<div><div class="row"><span class="grow">${r.t} <span class="small muted">(ප්‍රශ්න ${r.n})</span></span><span class="big">${r.pct}%</span></div><div class="bar2"><i style="width:${r.pct}%"></i></div></div>`).join('')}</div><div class="small muted">දුර්වලම පාඩම ඉහළින්.</div>`
+   :'<div class="note">තාම පාඩම් tag කරලා නැහැ.</div>'}
+   <div class="small muted">ලකුණු දාන තැනදී (සහ පුහුණුවේදී) ප්‍රශ්නයට පාඩම තෝරන්න.${un?` Tag නොකළ ප්‍රශ්න ${un}ක් තියෙනවා.`:''}</div></div>`;
+}
+const b2d=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)});
+async function backup(){
+  const ps=(await idbDo('readonly',s=>s.getAll()).catch(()=>[]))||[],out={v:1,S,papers:[]};
+  for(const r of ps)out.papers.push(Object.assign({},r,{sections:await Promise.all(r.sections.map(async s=>Object.assign({},s,{q:await Promise.all(s.q.map(async q=>({id:q.id,n:q.n,qb:await b2d(q.qb),ab:await Promise.all((q.ab||[]).map(b2d))})))})))}));
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(out)],{type:'application/json'}));a.download='ol-timer-backup-'+today()+'.json';a.click();
+}
+async function restore(file){
+  try{const d=JSON.parse(await file.text());if(!d.S)throw new Error('වැරදි file එකක්');
+    for(const r of d.papers||[]){const rec=Object.assign({},r,{sections:await Promise.all(r.sections.map(async s=>Object.assign({},s,{q:await Promise.all(s.q.map(async q=>({id:q.id,n:q.n,qb:await (await fetch(q.qb)).blob(),ab:await Promise.all((q.ab||[]).map(async u=>(await fetch(u)).blob()))})))})))});await idbDo('readwrite',x=>x.put(rec))}
+    S=Object.assign({history:[],target:75,active:null,lastStart:null,tags:{},prac:{},rem:{on:false,t:'18:00',last:''}},d.S);save();location.reload();
+  }catch(e){alert('Restore වුණේ නැහැ: '+e.message)}
+}
+function vSet(){const r=S.rem;return `${topBar('Settings','Backup / මතක් කිරීම')}<div class="stack">
+  <div class="panel stack"><h3>Backup</h3><div class="small muted">ලකුණු, history, tags සහ ඔයා එකතු කළ papers file එකකට සුරකිනවා. Phone එකෙන් computer එකට ගෙනියන්න පුළුවන්.</div>
+   <button class="btn" data-act="bk">Backup බාගන්න</button>
+   <label class="small muted">Backup file එකකින් ආපසු දාන්න<input class="fld" type="file" accept=".json" data-rs="1"></label></div>
+  <div class="panel stack"><h3>දිනපතා මතක් කිරීම</h3><div class="row"><button class="chip ${r.on?'on':''}" data-act="remtog">${r.on?'ක්‍රියාත්මකයි':'ක්‍රියාත්මක කරන්න'}</button><input class="fld" type="time" value="${r.t}" data-rem="1" style="width:auto"></div>
+   <div class="small muted">App එක browser එකේ open වෙලා තියෙද්දී විතරයි notification සහ ශබ්දය එන්නේ.</div></div></div>`}
+function remDue(){const r=S.rem;if(!r||!r.on||usedToday()||S.active)return false;const n=new Date(),p=r.t.split(':');return n.getHours()*60+n.getMinutes()>=+p[0]*60+ +p[1]}
+function remCheck(){if(!remDue()||S.rem.last===today())return;S.rem.last=today();save();
+  try{if(window.Notification&&Notification.permission==='granted')new Notification('අද paper එක කරන්න වෙලාව!',{body:'O/L Paper Timer'})}catch(e){}
+  beep(2);if(view==='home')render()}
+setInterval(remCheck,30000);
+function homeExtra(){const n=wrongKeys().length;return `${remDue()?'<div class="note">අද paper එක තාම කරලා නැහැ. Paper එක පටන් ගන්න වෙලාව!</div>':''}
+  <div class="panel stack"><h3>තව මෙවලම්</h3><div class="row" style="flex-wrap:wrap"><button class="btn" data-act="go" data-v="prac">පුහුණුව${n?` (වැරදුණු ${n})`:''}</button><button class="btn" data-act="go" data-v="prog">ප්‍රගතිය chart</button><button class="btn" data-act="go" data-v="ana">පාඩම් විශ්ලේෂණය</button><button class="btn" data-act="go" data-v="set">Backup / මතක් කිරීම</button></div></div>`}
+async function shareCard(){
+  try{await document.fonts.ready}catch(e){}
+  const h=doc,p=paperOf(h.pid),sc=score(p,h.marks),pct=Math.round(sc.total/sc.max*100),cv=document.createElement('canvas');cv.width=cv.height=1080;const c=cv.getContext('2d');
+  c.fillStyle='#12254A';c.fillRect(0,0,1080,1080);c.fillStyle='#D9480F';c.fillRect(0,0,1080,16);c.textAlign='center';c.fillStyle='#fff';
+  c.font='600 44px "Noto Sans Sinhala",sans-serif';c.fillText('Road to Engineer',540,150);
+  c.font='700 56px "Noto Sans Sinhala",sans-serif';c.fillText(p.year+' · '+p.title,540,250);
+  c.font='700 300px "Barlow Condensed",sans-serif';c.fillText(sc.total+'/'+sc.max,540,600);
+  c.font='700 120px "Barlow Condensed",sans-serif';c.fillStyle='#FFA94D';c.fillText(pct+'%  ·  Grade '+grade(pct),540,760);
+  c.fillStyle='#C9D3E5';c.font='400 40px "Noto Sans Sinhala",sans-serif';c.fillText(h.date,540,900);c.fillText('O/L Paper Timer',540,990);
+  const b=await new Promise(r=>cv.toBlob(r,'image/png')),f=new File([b],'result-'+h.date+'.png',{type:'image/png'});
+  if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]});return}catch(e){}}
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=f.name;a.click();
+}
+document.addEventListener('change',e=>{const t=e.target;
+  if(t.matches('select[data-tag]')){S.tags[t.dataset.tag]=t.value;save()}
+  else if(t.matches('input[data-rs]')&&t.files[0])restore(t.files[0]);
+  else if(t.matches('input[data-rem]')){S.rem.t=t.value||'18:00';S.rem.last='';save()}});
+const VIEWS={prac:vPrac,prog:vProg,ana:vAna,set:vSet};
+
+/* ---------- Extras 2: times, countdown, auto dark, notes, resume, presets, teacher ---------- */
+S.tm=S.tm||{};S.notes=S.notes||{};S.exam=S.exam||'2026-12-08';if(S.auto==null)S.auto=true;S.name=S.name||'';
+const esc=x=>String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const noteBox=(key,ph)=>`<textarea class="fld" rows="2" data-note="${key}" placeholder="${ph||'සටහනක්...'}">${esc(S.notes[key]||'')}</textarea>`;
+function applyTm(){PAPERS.forEach(p=>p.sections.forEach((s,i)=>{if(!s.d0)s.d0={secs:s.secs,review:s.review};const o=(S.tm[p.id]||[])[i]||{};
+  s.secs=o.secs!=null?o.secs:s.d0.secs;s.review=o.review!=null?o.review:s.d0.review}))}
+function autoTheme(){if(!S.auto)return;const h=new Date().getHours();document.documentElement.dataset.theme=(h>=19||h<6)?'dark':'light'}
+setInterval(autoTheme,60000);autoTheme();
+PRESETS.mcq40={title:'බහුවරණ',name:'බහුවරණ ප්‍රශ්න 40ක් (විද්‍යාව I වගේ)',secs:[{key:'A',name:'බහුවරණ',max:1,secs:90,review:0,ns:range(1,40),ids:range(1,40).map(n=>'Q'+n)}]};
+function getPr(){const v=$('#apre').value;if(v!=='custom')return PRESETS[v];
+  const secs=$('#acs').value.split(',').map(x=>x.trim().split(':')).filter(a=>a.length>=5).map(a=>{const c=+a[1];return {key:a[0],name:a[0]+' කොටස',max:+a[2],secs:+a[3],review:(+a[4])*60,best:a[5]?+a[5]:undefined,ns:range(1,c),ids:range(1,c).map(n=>a[0]+n)}});
+  if(!secs.length)throw new Error('Custom ව්‍යුහය වැරදියි. උදා: A:25:2:120:10, B:5:10:600:0');return {title:'Paper',secs}}
+function resumeTxt(){const a=S.active,p=paperOf(a.pid);if(!p||a.mode==='mark')return 'ලකුණු දැමීම දිගටම කරන්න';const s=p.sections[a.sec]||p.sections[0];
+  return `දිගටම කරන්න · ${p.title} ${s.name} ${a.mode==='review'?'පරීක්ෂාව':'ප්‍රශ්නය '+(a.qi+1)+'/'+s.q.length} (නවතා ඇත)`}
+function daysLeft(){return Math.ceil((new Date(S.exam+'T00:00:00')-new Date(today()+'T00:00:00'))/864e5)}
+function homeExtra2(){const d=daysLeft();
+  const cd=`<div class="panel today"><div class="row"><div class="grow"><div class="tag">විභාගයට</div><div class="big">${d>0?d+' දින':d===0?'අද!':'ඉවරයි'}</div></div><div class="small muted">${S.exam}${d>0?` · දවසකට paper එකක් නම් තව ${d}ක් කරන්න පුළුවන්`:''}</div></div></div>`;
+  return subjChips()+cd+(S.mock&&!S.active?'<button class="btn pri" data-act="mockbrk">Mock exam දිගටම කරන්න</button>':'')+homeExtra()+`<div class="panel stack"><div class="row" style="flex-wrap:wrap"><button class="btn" data-act="go" data-v="tm">කාල සැකසුම්</button><button class="btn" data-act="go" data-v="notes">සටහන්</button><button class="btn" data-act="go" data-v="teach">Teacher view</button><button class="btn" data-act="go" data-v="mock">Mock exam</button><button class="btn" data-act="go" data-v="cal">Calendar</button><button class="btn" data-act="go" data-v="form">සූත්‍ර</button><button class="btn" data-act="go" data-v="vid">YouTube videos</button></div></div>`}
+function vTm(){return `${topBar('Timer','කාල සැකසුම්')}<div class="stack">${PAPERS.map(p=>`<div class="panel stack"><h3>${p.year} · ${p.title}</h3>${p.sections.map((s,i)=>`<div class="row" style="flex-wrap:wrap"><span class="grow">${s.name}</span>
+  <label class="small muted">ප්‍රශ්නයකට (තත්පර)<input class="fld" type="number" min="10" style="width:100px" data-tm="${p.id}|${i}|secs" value="${s.secs}"></label>
+  <label class="small muted">පරීක්ෂාව (මිනිත්තු)<input class="fld" type="number" min="0" style="width:100px" data-tm="${p.id}|${i}|review" value="${s.review/60}"></label></div>`).join('')}</div>`).join('')}
+  <button class="btn" data-act="tmreset">සියල්ල මුල් අගයට</button></div>`}
+function vNotes(){const rows=Object.entries(S.notes).filter(e=>e[1]&&e[1].trim()).map(([k,t])=>{const [pid,qid]=k.split('|'),p=paperOf(pid);if(!p)return '';
+  const it=qid[0]==='S'?null:flat(p).find(x=>x.id===qid);return `<div class="panel stack"><div class="tag">${p.year} · ${p.title} · ${it?'ප්‍රශ්නය '+it.n:'කොටස '+qid.slice(1)}</div><div>${esc(t).replace(/\n/g,'<br>')}</div></div>`}).join('');
+  return `${topBar('Notes','සටහන්')}<div class="stack">${rows||'<div class="note">තාම සටහන් නැහැ. ලකුණු දාන තැනදී හෝ පුහුණුවේදී ලියන්න.</div>'}</div>`}
+let TCH=[];
+async function loadTeach(files){TCH=[];for(const f of files){try{const d=JSON.parse(await f.text()),hs=(d.S&&d.S.history)||[],pc=hs.map(h=>Math.round(h.total/h.max*100));
+  TCH.push({name:(d.S&&d.S.name)||f.name.replace(/\.json$/,''),n:hs.length,avg:pc.length?Math.round(pc.reduce((a,b)=>a+b,0)/pc.length):0,best:pc.length?Math.max(...pc):0,last:hs[0]?hs[0].date:'-',pc:pc.slice(0,8).reverse()})}catch(e){}}
+  TCH.sort((a,b)=>b.avg-a.avg);render()}
+function vTeach(){return `${topBar('Teacher','Teacher view / Leaderboard')}<div class="stack"><div class="panel stack"><div class="small muted">ශිෂ්‍යයන් තමන්ගේ Backup file එක (Backup / මතක් කිරීම පිටුවෙන්) ඔයාට එවන්න ඕන. ඒ files ඔක්කොම මෙතනට දාන්න.</div>
+  <input class="fld" type="file" multiple accept=".json" data-teach="1"></div>
+  ${TCH.length?`<div class="list">${TCH.map((r,i)=>`<div class="item"><span class="big">${i+1}</span><div class="grow"><b>${esc(r.name)}</b><div class="small muted">Papers ${r.n} · සාමාන්‍ය ${r.avg}% · උපරිම ${r.best}% · අන්තිම ${r.last}</div></div><div class="spark" style="width:80px">${r.pc.map(v=>`<i style="height:${Math.max(4,v)}%"></i>`).join('')}</div></div>`).join('')}</div>`:''}</div>`}
+const _vSet=vSet;
+VIEWS.set=()=>_vSet().replace(/<\/div>\s*$/,`<div class="panel stack"><h3>ඔයාගේ නම</h3><input class="fld" data-name="1" value="${esc(S.name)}" placeholder="Teacher view / leaderboard එකට">
+  <h3>විභාග දිනය</h3><input class="fld" type="date" data-exam="1" value="${S.exam}">
+  <h3>Theme</h3><button class="chip ${S.auto?'on':''}" data-act="autotog">${S.auto?'රාත්‍රියට ස්වයංක්‍රීයව dark (ක්‍රියාත්මකයි)':'රාත්‍රියට ස්වයංක්‍රීයව dark (අක්‍රියයි)'}</button></div></div>`);
+VIEWS.tm=vTm;VIEWS.notes=vNotes;VIEWS.teach=vTeach;
+document.addEventListener('input',e=>{const t=e.target;if(t.matches('textarea[data-note]')){S.notes[t.dataset.note]=t.value;save()}});
+document.addEventListener('change',e=>{const t=e.target;
+  if(t.matches('input[data-tm]')){const [pid,i,fl]=t.dataset.tm.split('|'),v=+t.value||0;S.tm[pid]=S.tm[pid]||[];const o=S.tm[pid][+i]=S.tm[pid][+i]||{};o[fl]=fl==='secs'?Math.max(10,v):Math.max(0,v)*60;applyTm();save()}
+  else if(t.matches('input[data-exam]')&&t.value){S.exam=t.value;save()}
+  else if(t.matches('input[data-name]')){S.name=t.value.trim();save()}
+  else if(t.matches('input[data-teach]'))loadTeach(t.files)});
+
+/* ---------- Extras 3: crop editor, spaced repetition, mock, reasons, time analysis, calendar, PWA, formulas, warning ---------- */
+S.sr=S.sr||{};S.why=S.why||{};S.fm=S.fm||'';if(S.warn==null)S.warn=true;
+let CR=null,CAL=0,DIP=null;
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();DIP=e});
+const bmp=b=>createImageBitmap(b);
+const toWebp=c=>new Promise(r=>c.toBlob(r,'image/webp',.85));
+async function stack(a,b){const x=await bmp(a),y=await bmp(b),c=document.createElement('canvas');c.width=Math.max(x.width,y.width);c.height=x.height+y.height;
+  const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(x,0,0);g.drawImage(y,0,x.height);return toWebp(c)}
+async function crOp(op,i){
+  const q=CR.q;
+  if(op==='del')q.splice(i,1);
+  else if(op==='up'){if(i>0)q.splice(i-1,2,await stack(q[i-1],q[i]))}
+  else{const im=await bmp(q[i]),w=im.width,h=im.height;
+    const cut=(y0,y1)=>{const c=document.createElement('canvas');c.width=w;c.height=Math.max(1,y1-y0);c.getContext('2d').drawImage(im,0,y0,w,y1-y0,0,0,w,y1-y0);return toWebp(c)};
+    if(op==='top')q[i]=await cut(Math.round(h*.1),h);
+    else if(op==='bot')q[i]=await cut(0,Math.round(h*.9));
+    else if(op==='split')q.splice(i,1,await cut(0,Math.round(h/2)),await cut(Math.round(h/2),h))}
+  drawPv();
+}
+function drawPv(){const pv=$('#apv'),sv=$('#asv');if(!pv||!CR)return;
+  pv.innerHTML=`<div class="note">ප්‍රශ්න ${CR.q.length}/${CR.exp.length}. වැරදි කැපුම් මෙතනින් හදන්න.</div>`+CR.q.map((b,i)=>`<div class="sheet stack"><div class="tag">${CR.lab[i]||'+'+(i+1)}</div><img src="${URL.createObjectURL(b)}"><div class="row" style="flex-wrap:wrap">${[['up','ඉහළ එක සමඟ එක් කරන්න'],['top','උඩින් 10% කපන්න'],['bot','යටින් 10% කපන්න'],['split','දෙකට කඩන්න'],['del','මකන්න']].map(o=>`<button class="btn ghost" data-act="cr" data-op="${o[0]}" data-i="${i}">${o[1]}</button>`).join('')}</div></div>`).join('');
+  sv.disabled=CR.q.length!==CR.exp.length}
+const INT=[1,3,7,14,30];
+function dueKeys(){const m=statusMap(),now=Date.now();return Object.keys(m).filter(k=>{const sr=S.sr[k],due=sr?sr.due:(m[k].ok?Infinity:m[k].ts+864e5);return due<=now})}
+const REASONS=['අවධානය අඩුවීම','සූත්‍රය අමතක වීම','සංකල්පය නොතේරීම','ගණනය කිරීමේ වැරදි','කාලය මදි','ප්‍රශ්නය වැරදි ලෙස කියවීම'];
+const whySel=key=>`<select class="fld" data-why="${key}"><option value="">වැරදුණු හේතුව (අවශ්‍ය නම්)</option>${REASONS.map(t=>`<option ${S.why[key]===t?'selected':''}>${t}</option>`).join('')}</select>`;
+function whyPanel(){const c={};Object.entries(S.why).forEach(([k,v])=>{if(v&&itemOf(k))c[v]=(c[v]||0)+1});const rows=Object.entries(c).sort((a,b)=>b[1]-a[1]);
+  return `<div class="stack" style="margin-top:14px"><div class="panel stack"><h3>වැරදෙන්නේ ඇයි?</h3>${rows.length?rows.map(r=>`<div class="row"><span class="grow">${r[0]}</span><span class="big">${r[1]}</span></div>`).join(''):'<div class="small muted">ලකුණු දාන තැනදී වැරදුණු හේතුව තෝරන්න.</div>'}</div></div>`}
+function timePanel(){const a={};
+  S.history.forEach(h=>{const p=paperOf(h.pid);if(!p||!h.times)return;flat(p).forEach(it=>{const t=h.times[it.id];if(t==null||h.marks[it.id]==null)return;
+    const k=K(h.pid,it.id),x=a[k]=a[k]||{it,p,r:0,l:0,n:0};x.r+=t/it.sec.secs;x.l+=it.sec.max-(+h.marks[it.id]||0);x.n++})});
+  const rows=Object.values(a).map(x=>({x,r:x.r/x.n,l:x.l/x.n})).filter(o=>o.r>=.85&&o.l>0).sort((p,q)=>q.l-p.l).slice(0,8);
+  return `<div class="stack" style="margin-top:14px"><div class="panel stack"><h3>කාලය වැඩියෙන් ගියත් ලකුණු අඩු ප්‍රශ්න</h3>${rows.length?rows.map(o=>`<div class="row"><span class="grow">${o.x.p.year} ${o.x.p.title} · ප්‍රශ්නය ${o.x.it.n}</span><span class="small muted">කාලය ${Math.round(o.r*100)}% · අඩු ලකුණු ${o.l.toFixed(1)}</span></div>`).join(''):'<div class="small muted">දත්ත ප්‍රමාණවත් නැහැ.</div>'}</div></div>`}
+function vMock(){const g={};PAPERS.forEach(p=>(g[p.year]=g[p.year]||[]).push(p));const ys=Object.entries(g).filter(e=>e[1].length>1);
+  return `${topBar('Mock','Mock exam')}<div class="stack"><div class="note small">Paper දෙකම එක දිගට, ඇත්ත විභාගයේ වගේ කාලයෙන් කරන්න. අතරට විවේකයක් (මිනිත්තු 10ක්) තියෙනවා.</div>${ys.map(([y,ps])=>`<div class="panel stack"><b>${y}</b><div class="small muted">${ps.map(p=>p.title).join(' → ')}</div><button class="btn pri" data-act="mockgo" data-v="${ps.map(p=>p.id).join(',')}">පටන් ගන්න</button></div>`).join('')||'<div class="note">Papers දෙකක් තියෙන අවුරුද්දක් නැහැ.</div>'}</div>`}
+function vBreak(){const m=S.mock;if(!m)return vHome();const r=Math.max(0,(m.until-Date.now())/1000),np=paperOf(m.ids[m.i+1]);
+  return `${topBar('Mock','විවේකය')}<div class="stack"><div class="panel today"><div class="tag">ඊළඟ paper එකට</div><div class="big" style="font-size:3rem">${fmt(r)}</div><div class="muted">${np?np.year+' · '+np.title:''}</div></div><button class="btn pri" data-act="mocknext">දැන්ම පටන් ගන්න</button><button class="btn" data-act="mockres">කලින් paper එකේ ප්‍රතිඵලය බලන්න</button></div>`}
+setInterval(()=>{if(view==='break')render()},1000);
+function vCal(){const n=new Date(),d0=new Date(n.getFullYear(),n.getMonth()+CAL,1),y=d0.getFullYear(),mo=d0.getMonth(),dim=new Date(y,mo+1,0).getDate(),pad=x=>String(x).padStart(2,'0'),days=new Set(S.history.map(h=>h.date));
+  let cells='<span></span>'.repeat(d0.getDay());
+  for(let d=1;d<=dim;d++){const on=days.has(y+'-'+pad(mo+1)+'-'+pad(d));cells+=`<div style="padding:10px 0;text-align:center;border-radius:8px;border:1px solid var(--line);background:${on?'var(--good)':'var(--card)'};color:${on?'#fff':'var(--ink)'}">${d}</div>`}
+  const wk=S.history.filter(h=>Date.now()-h.ts<7*864e5),avg=wk.length?Math.round(wk.reduce((t,h)=>t+h.total/h.max*100,0)/wk.length):0;
+  return `${topBar('Calendar',y+' / '+pad(mo+1))}<div class="stack"><div class="row"><button class="btn" data-act="cm" data-v="-1">කලින්</button><span class="grow"></span><button class="btn" data-act="cm" data-v="1">ඊළඟ</button></div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">${cells}</div><div class="panel stack"><h3>මේ සතිය</h3><div>Papers ${wk.length} · සාමාන්‍යය ${avg}% · අඛණ්ඩව ${streak()} දින</div></div></div>`}
+const vForm=()=>`${topBar('Formulas','සූත්‍ර පත්‍රිකාව')}<div class="stack"><textarea class="fld" rows="18" data-fm="1" placeholder="ඔයාගේ සූත්‍ර, සටහන් මෙතන ලියන්න...">${esc(S.fm)}</textarea></div>`;
+function extraSet(){return `<div class="stack" style="margin-top:14px"><div class="panel stack"><h3>වෙනත්</h3><button class="chip ${S.warn?'on':''}" data-act="warntog">${S.warn?'තත්පර 30ක අනතුරු ඇඟවීම (ක්‍රියාත්මකයි)':'තත්පර 30ක අනතුරු ඇඟවීම (අක්‍රියයි)'}</button>
+  ${DIP?'<button class="btn" data-act="inst">Phone එකට app එකක් විදියට install කරන්න</button>':'<div class="small muted">Install බොත්තම එන්නේ file ටික https website එකකට දාපු පස්සේ (browser එක ඉඩ දෙනවා නම්).</div>'}</div></div>`}
+VIEWS.mock=vMock;VIEWS.break=vBreak;VIEWS.cal=vCal;VIEWS.form=vForm;
+{const a=VIEWS.prog,b=VIEWS.ana,c=VIEWS.set;VIEWS.prog=()=>a()+timePanel();VIEWS.ana=()=>b()+whyPanel();VIEWS.set=()=>c()+extraSet()}
+document.addEventListener('input',e=>{const t=e.target;if(t.matches('textarea[data-fm]')){S.fm=t.value;save()}});
+document.addEventListener('change',e=>{const t=e.target;if(t.matches('select[data-why]')){S.why[t.dataset.why]=t.value;save()}});
+if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0)navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+/* ---------- Extras 4: subjects + YouTube videos ---------- */
+S.vids=S.vids||{};S.xt=S.xt||{};S.chan=S.chan||'';S.subj=S.subj||'';
+const SCI=['චලිතය සහ බලය','ශක්තිය','විද්‍යුතය','තරංග සහ ආලෝකය','පදාර්ථය සහ ද්‍රව්‍ය','රසායනික ප්‍රතික්‍රියා','අම්ල සහ භෂ්ම','සෛල සහ පටක','ශාක','මිනිස් ශරීරය','පරිසරය','පෘථිවිය සහ අවකාශය'];
+const subjOf=p=>p.subject||'ගණිතය';
+const subjects=()=>[...new Set(PAPERS.map(subjOf))];
+const topicsOf=sj=>(sj==='ගණිතය'?TOPICS:sj==='විද්‍යාව'?SCI:[]).concat(S.xt[sj]||[]);
+const allTopics=()=>[...new Set(subjects().flatMap(topicsOf))];
+const topicsFor=key=>{const p=paperOf(key.split('|')[0]);return topicsOf(p?subjOf(p):'ගණිතය')};
+const yt=q=>'https://www.youtube.com/results?search_query='+encodeURIComponent(q+(S.chan?' '+S.chan:''));
+const AT='target="_blank" rel="noopener" style="display:inline-block;text-decoration:none"';
+const vidRow=(list,k)=>(list||[]).map((v,i)=>`<div class="row"><a class="grow" ${'target="_blank" rel="noopener"'} href="${esc(v.u)}">${esc(v.t||v.u)}</a><button class="btn ghost" data-act="vdel" data-vk="${esc(k)}" data-i="${i}">මකන්න</button></div>`).join('');
+const vidAdd=k=>`<div class="row" style="flex-wrap:wrap"><input class="fld" style="flex:1;min-width:120px" placeholder="නම (අවශ්‍ය නම්)"><input class="fld" style="flex:2;min-width:180px" placeholder="YouTube link එක paste කරන්න"><button class="btn" data-act="vadd" data-vk="${esc(k)}">සුරකින්න</button></div>`;
+function qVid(pid,it){const p=paperOf(pid),sj=subjOf(p),k='Q:'+pid+':'+it.id,tp=S.tags[K(pid,it.id)];
+  return `<div class="panel stack"><div class="tag">Video පැහැදිලි කිරීම්</div><div class="row" style="flex-wrap:wrap"><a class="btn" ${AT} href="${yt(`${p.year} ${sj} paper ප්‍රශ්නය ${it.n} පිළිතුර සිංහල`)}">පිළිතුර video සොයන්න</a>${tp?`<a class="btn" ${AT} href="${yt(`${tp} O/L ${sj} සිංහල`)}">${esc(tp)} පාඩම් video</a>`:''}</div>${vidRow(S.vids[k],k)}${vidAdd(k)}</div>`}
+let VD={s:''};
+function vVid(){const sjs=subjects(),sj=sjs.includes(VD.s)?VD.s:sjs[0],ps=PAPERS.filter(p=>subjOf(p)===sj);
+  return `${topBar('Videos','YouTube Videos')}<div class="stack">
+  <div class="note small">Search බොත්තම් YouTube එකේ සිංහලෙන් සොයනවා. හොඳ video එකක් හම්බුණාම link එක paste කරලා සුරකින්න. ප්‍රියතම channel එකක් හෝ ගුරුවරයෙක්ගේ නමක් පහළින් දැම්මොත් ඒකත් එක්ක සොයනවා.</div>
+  <input class="fld" data-chan="1" value="${esc(S.chan)}" placeholder="ප්‍රියතම channel / ගුරුවරයාගේ නම (අවශ්‍ය නම්)">
+  <div class="row" style="flex-wrap:wrap">${sjs.map(x=>`<button class="chip ${x===sj?'on':''}" data-act="vsj" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+  <h3>පාඩම් අනුව</h3>${topicsOf(sj).map(t=>{const k='T:'+sj+':'+t;return `<div class="panel stack"><b>${esc(t)}</b><a class="btn" ${AT} href="${yt(`${t} O/L ${sj} සිංහල`)}">YouTube එකේ සොයන්න</a>${vidRow(S.vids[k],k)}${vidAdd(k)}</div>`}).join('')||'<div class="small muted">පාඩම් නැහැ. පහළින් එකතු කරන්න.</div>'}
+  <div class="row"><input class="fld" id="ntp" placeholder="අලුත් පාඩමක් එකතු කරන්න"><button class="btn" data-act="addtopic">එකතු කරන්න</button></div>
+  <h3>Paper discussion (පිළිතුරු සහිත videos)</h3>${ps.map(p=>{const k='P:'+p.id;return `<div class="panel stack"><b>${p.year} · ${p.title}</b><a class="btn" ${AT} href="${yt(`${p.year} O/L ${sj} ${p.title} paper discussion පිළිතුරු සිංහල`)}">Paper discussion සොයන්න</a>${vidRow(S.vids[k],k)}${vidAdd(k)}</div>`}).join('')}</div>`}
+VIEWS.vid=vVid;
+function subjChips(){const sj=subjects();if(sj.length<2)return'';return `<div class="row" style="flex-wrap:wrap"><button class="chip ${S.subj?'':'on'}" data-act="subj" data-v="">ඔක්කොම විෂය</button>${sj.map(x=>`<button class="chip ${S.subj===x?'on':''}" data-act="subj" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div>`}
+document.addEventListener('change',e=>{const t=e.target;if(t.matches('input[data-chan]')){S.chan=t.value.trim();save()}});
 
 /* ---------- Events ---------- */
 function bind(){}
@@ -297,11 +635,11 @@ document.addEventListener('click',e=>{
   const act=b.dataset.act,a=S.active;
   if(act!=='reset')askReset=false;
   switch(act){
-   case 'theme':{const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;r.dataset.theme=dark?'light':'dark';return}
+   case 'theme':{S.auto=false;save();const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;r.dataset.theme=dark?'light':'dark';return}
    case 'start':startPaper(b.dataset.id);return;
    case 'resume':view='exam';break;
    case 'target':S.target=+b.dataset.v;save();break;
-   case 'reset':if(!askReset){askReset=true}else{S={history:[],target:75,active:null,lastStart:null};save();askReset=false}break;
+   case 'reset':if(!askReset){askReset=true}else{S={history:[],target:75,active:null,lastStart:null,tags:S.tags,prac:{},rem:S.rem,tm:S.tm,notes:S.notes,exam:S.exam,auto:S.auto,name:S.name,fm:S.fm,why:S.why,warn:S.warn,vids:S.vids,xt:S.xt,chan:S.chan,subj:S.subj};save();askReset=false}break;
    case 'cancel':break;
    case 'home':view='home';break;
    case 'open':doc=S.history[+b.dataset.i];view='result';break;
@@ -315,6 +653,36 @@ document.addEventListener('click',e=>{
    case 'mprev':doc.mi=Math.max(0,(doc.mi||0)-1);break;
    case 'mnext':doc.mi=(doc.mi||0)+1;break;
    case 'mark':{const it=flat(paperOf(doc.pid))[doc.mi||0];doc.marks[it.id]=+b.dataset.v;if(doc!==S.active){const sc=score(paperOf(doc.pid),doc.marks);doc.total=sc.total}save();break}
+   case 'addp':ADD=null;view='add';break;
+   case 'cropgo':doCrop();return;
+   case 'saveadd':saveAdd();return;
+   case 'delp':if(confirm('මේ paper එක මකන්නද?'))delPaper(b.dataset.id);return;
+   case 'go':CAL=0;PR.q=null;PR.i=0;PR.show=false;view=b.dataset.v;break;
+   case 'psrc':PR.src=b.dataset.v;break;
+   case 'ptopic':PR.topic=b.dataset.v;break;
+   case 'pstart':pracStart();break;
+   case 'pshow':PR.show=true;break;
+   case 'pok':case 'pno':{const x=PR.q[PR.i];S.prac[K(x.p.id,x.it.id)]={ts:Date.now(),ok:act==='pok'};{const kk=K(x.p.id,x.it.id),st=act==='pok'?((S.sr[kk]&&S.sr[kk].step)||0)+1:0;S.sr[kk]={step:st,due:Date.now()+INT[Math.min(st,INT.length-1)]*864e5}}save();PR.i++;PR.show=false;break}
+   case 'pexit':PR.q=null;break;
+   case 'share':shareCard();return;
+   case 'bk':backup();return;
+   case 'remtog':S.rem.on=!S.rem.on;if(S.rem.on&&window.Notification&&Notification.permission==='default')Notification.requestPermission();save();break;
+   case 'tmreset':S.tm={};applyTm();save();break;
+   case 'autotog':S.auto=!S.auto;save();autoTheme();break;
+   case 'abort':if(confirm('මේ paper එක අත්හරින්නද?')){S.active=null;S.lastStart=null;save();view='home'}break;
+   case 'cr':crOp(b.dataset.op,+b.dataset.i);return;
+   case 'mockgo':if(S.active&&!confirm('දැනට පටන් ගත් paper එක මැකෙනවා. ඉදිරියට යන්නද?'))break;S.mock={ids:b.dataset.v.split(','),i:0};startPaper(S.mock.ids[0]);return;
+   case 'mocknext':S.mock.i++;startPaper(S.mock.ids[S.mock.i]);return;
+   case 'mockres':view='result';break;
+   case 'mockbrk':view='break';break;
+   case 'cm':CAL+=+b.dataset.v;break;
+   case 'inst':if(DIP)DIP.prompt();return;
+   case 'warntog':S.warn=!S.warn;save();break;
+   case 'vadd':{const ins=b.closest('.row').querySelectorAll('input'),u=ins[1].value.trim();if(!/^https?:\/\//i.test(u)){alert('YouTube link එකක් දාන්න (https://...)');return}const k=b.dataset.vk;(S.vids[k]=S.vids[k]||[]).push({t:ins[0].value.trim(),u});save();break}
+   case 'vdel':S.vids[b.dataset.vk].splice(+b.dataset.i,1);save();break;
+   case 'vsj':VD.s=b.dataset.v;break;
+   case 'addtopic':{const t=$('#ntp').value.trim(),sj=subjects().includes(VD.s)?VD.s:subjects()[0];if(t){(S.xt[sj]=S.xt[sj]||[]).push(t);save()}break}
+   case 'subj':S.subj=b.dataset.v;save();break;
    case 'done':if(doc===S.active)return finishPaper();view='result';break;
   }
   if(doc&&(act==='mark'||act==='mi'||act==='mprev'||act==='mnext'))save();
@@ -322,8 +690,7 @@ document.addEventListener('click',e=>{
 });
 setInterval(onTick,250);
 document.addEventListener('visibilitychange',onTick);
-if(S.active)view='exam';
-render();
+loadCustom().then(()=>{if(S.active&&!paperOf(S.active.pid))S.active=null;applyTm();if(S.active&&(S.active.mode==='q'||S.active.mode==='review')&&S.active.left==null){S.active.left=Math.max(0,(S.active.endAt-Date.now())/1000);save()}render()});
 </script>
 
 </body></html>
